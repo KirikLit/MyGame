@@ -4,14 +4,17 @@ from .tileset_loader import unpack_spritesheet, load_sprite_sheet
 
 
 class Object(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, scale, name, animated=False, interactive=False):
+    def __init__(self, x, y, width, scale, name, animated=False, interactive=False, dokill=False):
         pygame.sprite.Sprite.__init__(self)
+        self.type = name
         self.x = x
         self.y = y
         self.animated = animated
+        self.interactive = interactive
         self.action = 0
         self.action_frame = 0
         self.update_time = pygame.time.get_ticks()
+        self.dokill = dokill
         # load image
         if animated and not interactive:
             self.anim_list = unpack_spritesheet(f'data/img/object', [name], scale, width)
@@ -26,9 +29,11 @@ class Object(pygame.sprite.Sprite):
         self.rect.y = y
         self.rect.x = x
 
-    def update(self):
+    def update(self, scroll):
         if self.animated:
             self.update_anim()
+        # scroll
+        self.rect.x -= scroll
 
     def update_action(self, new_action):
         if new_action != self.action:
@@ -44,6 +49,8 @@ class Object(pygame.sprite.Sprite):
         if self.action_frame == len(self.anim_list[self.action]):
             if self.action == 1:
                 self.action_frame = len(self.anim_list[self.action]) - 1
+                if self.dokill:
+                    self.kill()
             else:
                 self.action_frame = 0
         self.image = self.anim_list[self.action][self.action_frame]

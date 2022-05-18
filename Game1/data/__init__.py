@@ -6,3 +6,5 @@ from data.enemy import Enemy
 from data.healthbar import HealthBar
 from .objects import Object
 from .background import *
+from .world import World
+from .level_loader import load_level

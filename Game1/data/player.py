@@ -6,7 +6,7 @@ from data.config import *
 class Player:
     def __init__(self, x, y):
         self.alive = True
-        self.speed = 5
+        self.speed = 2
         self.action = 0
         self.action_frame = 0
         self.direction = 1
@@ -18,13 +18,14 @@ class Player:
         self.after_jump = False
         self.attack = False
         self.health = 100
+        self.max_health = 100
         self.visible = True
         self.hit_counter = 0
         self.key = False
 
         # load images
         anim_types = ['idle', 'run', 'jump_up', 'jump_down', 'attack', 'death', 'hit', 'sword', 'before_after_jump']
-        self.anim_list = tilesheet.unpack_spritesheet(f'data/img/player', anim_types, 2.5, 16)
+        self.anim_list = tilesheet.unpack_spritesheet(f'data/img/player', anim_types, 1, 16)
         self.image = self.anim_list[self.action][self.action_frame]
         self.rect = self.image.get_rect()
 
@@ -41,9 +42,10 @@ class Player:
         if self.visible:
             surface.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
 
-    def move(self, moving_left, moving_right):
+    def move(self, moving_left, moving_right, obstacle_group, bg_scroll):
         # reset vars
         dx, dy = 0, 0
+        screen_scroll = 0
 
         # move left / right
         if not self.attack:
@@ -58,7 +60,7 @@ class Player:
 
         # jump
         if self.jump and not self.in_air:
-            self.vel_y = -11
+            self.vel_y = -8
             self.jump = False
             self.in_air = True
 
@@ -68,16 +70,39 @@ class Player:
             self.vel_y = 10
         dy += self.vel_y
 
-        # temp collision
-        if self.rect.bottom + dy >= 300:
-            dy = 300 - self.rect.bottom
-            if self.in_air:
-                self.in_air = False
-                self.after_jump = True
+        # collision
+        for tile in obstacle_group:
+            # check x collision
+            if tile.rect.colliderect(self.rect.x + dx, self.rect.y, self.rect.width, self.rect.height):
+                dx = 0
+            # check y collision
+            if tile.rect.colliderect(self.rect.x, self.rect.y + dy, self.rect.width, self.rect.height):
+                # check if jumping
+                if self.vel_y < 0:
+                    self.vel_y = 0
+                    dy = tile.rect.bottom - self.rect.top
+                else:
+                    dy = tile.rect.top - self.rect.bottom
+                    self.vel_y = 0
+                    if self.in_air:
+                        self.in_air = False
+                        self.after_jump = True
 
         # Update pos
         self.rect.x += dx
         self.rect.y += dy
+
+        # scroll
+        if (self.rect.right > DISPLAY_WIDTH - SCROLL_TRESH and bg_scroll < 2240) or \
+                (self.rect.left < SCROLL_TRESH and bg_scroll > abs(dx)):
+            self.rect.x -= dx
+            screen_scroll = dx
+        elif (self.rect.right > DISPLAY_WIDTH - (SCROLL_TRESH + 40) and bg_scroll < 2240 and self.direction == 1) or \
+                (self.rect.left < (SCROLL_TRESH + 40) and bg_scroll > abs(dx) and self.direction == -1):
+            self.rect.x -= dx / 2
+            screen_scroll = dx / 2
+
+        return screen_scroll
 
     def update_action(self, new_action):
         if new_action != self.action and self.action != 6:
@@ -112,6 +137,8 @@ class Player:
         if self.health <= 0:
             self.update_action(5)
             self.alive = False
+        elif self.health > self.max_health:
+            self.health = self.max_health
 
 
 class Sword(pygame.sprite.Sprite):
@@ -126,7 +153,7 @@ class Sword(pygame.sprite.Sprite):
         self.used = False
 
     def update(self, enemy_group):
-        self.rect.centerx = self.player.rect.centerx + ((self.player.image.get_width() / 2 + 15) * self.player.direction)
+        self.rect.centerx = self.player.rect.centerx + ((self.player.image.get_width() / 2 + 5) * self.player.direction)
         self.rect.centery = self.player.rect.centery
 
         if not self.used:

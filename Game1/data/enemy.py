@@ -7,6 +7,8 @@ from data.config import *
 class Enemy:
     def __init__(self, enemy_type, x, y):
         self.anim_list = []
+        self.x = x
+        self.y = y
         self.health = 100
         self.speed = 1
         self.action_frame = 0
@@ -23,6 +25,7 @@ class Enemy:
         self.moving_left = False
         self.moving_right = False
         self.hit_counter = 0
+        self.move_timer = False
         self.enemy_type = enemy_type
 
         # anim types
@@ -34,9 +37,9 @@ class Enemy:
         # load images
         for anim in anim_types:
             if anim == 'attack':
-                img = tilesheet.load_sprite_sheet(f'data/img/enemy/{enemy_type}/{anim}.png', 2, 24)
+                img = tilesheet.load_sprite_sheet(f'data/img/enemy/{enemy_type}/{anim}.png', 1, 24)
             else:
-                img = tilesheet.load_sprite_sheet(f'data/img/enemy/{enemy_type}/{anim}.png', 2, 16)
+                img = tilesheet.load_sprite_sheet(f'data/img/enemy/{enemy_type}/{anim}.png', 1, 16)
             self.anim_list.append(img)
         self.image = self.anim_list[self.action][self.action_frame]
         self.rect = self.image.get_rect()
@@ -44,20 +47,22 @@ class Enemy:
         self.rect.x = x
         self.rect.y = y
 
-    def update(self):
+    def update(self, scroll):
+        # scroll
+        self.rect.x -= scroll
         # update hit counter
         if self.hit_counter > 0:
             self.hit_counter -= 1
+        self.move_timer = not self.move_timer
         # update all
         self.update_anim()
         self.check_alive()
 
-    def draw(self, surface):
-        if self.enemy_type == 'slime' and (self.moving_left or self.moving_right) and not self.idling:
-            self.flip = not self.flip
-        surface.blit(pygame.transform.flip(self.image, self.flip, False), self.rect)
+    def draw(self, surface, scroll):
+        slime_flip = lambda: not self.flip if self.enemy_type == 'slime' else self.flip
+        surface.blit(pygame.transform.flip(self.image, slime_flip(), False), self.rect)
 
-    def move(self):
+    def move(self, obstacle_list):
         # reset vars
         dx, dy = 0, 0
 
@@ -78,16 +83,30 @@ class Enemy:
         # apply velocity
         dy += self.vel_y
 
-        # temp collision
-        if self.rect.bottom + dy >= 300:
-            dy = 300 - self.rect.bottom
-            self.in_air = False
+        # collision
+        for tile in obstacle_list:
+            # check x collision
+            if tile.rect.colliderect(self.rect.x + dx, self.rect.y, self.rect.width, self.rect.height):
+                dx = 0
+                # if ai hit the wall then turn around
+                self.direction *= -1
+                self.move_counter = 0
+            # check y collision
+            if tile.rect.colliderect(self.rect.x, self.rect.y + dy, self.rect.width, self.rect.height):
+                # check if jumping
+                if self.vel_y < 0:
+                    self.vel_y = 0
+                    dy = tile.rect.bottom - self.rect.top
+                else:
+                    dy = tile.rect.top - self.rect.bottom
+                    self.vel_y = 0
+                    self.in_air = False
 
         # Update pos
         self.rect.x += dx
         self.rect.y += dy
 
-    def ai(self):
+    def ai(self, obst):
         if random.randint(1, 300) == 1 and not self.idling and self.enemy_type != 'worm':
             self.idling = True
             self.idling_counter = 180
@@ -99,7 +118,8 @@ class Enemy:
                 self.moving_right = False
             self.moving_left = not self.moving_right
             self.update_action(1)
-            self.move()
+            if self.move_timer:
+                self.move(obst)
             self.move_counter += 1
             # update vision
 
